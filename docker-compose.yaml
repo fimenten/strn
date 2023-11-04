@@ -1,0 +1,17 @@
+version: "2"
+services:
+  sotsuron:
+    # image: python:3.8-buster
+    build: .
+    # volumes:
+      # - D:/data:/data
+      # - C:/Users/tatsuya/PycharmProjects/botter:/botter
+    # working_dir: /botter
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: "all"
+              capabilities: [gpu]
