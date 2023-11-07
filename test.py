@@ -11,6 +11,12 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 from torchvision import transforms
+
+# from sklearn.datasets import make_regression
+
+
+
+
 class Corr_loss(nn.Module):
     def forward(self, x, y):
 
@@ -169,17 +175,20 @@ class MLP(nn.Module):
 
 
         self.last = lastModule_(128,output_size,ensamble)
-        self.weight_layer = nn.Sequential(nn.Linear(128,ensamble),)
-        # self.weight_layer = nn.Sequential(nn.ReLU(),nn.Linear(128,128),nn.ReLU(),nn.Linear(128,ensamble))
+        # self.weight_layer = nn.Sequential(nn.Linear(128,ensamble),)
+        self.weight_layer = nn.Sequential(nn.ReLU(),nn.Linear(128,128),nn.ReLU(),nn.Linear(128,ensamble))
         
         self.bn = nn.BatchNorm1d(128)
         self.bn2 = nn.BatchNorm1d(128)
+        self.bn3 = nn.BatchNorm1d(128)
+        
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = self.bn(x)
         x = torch.relu(self.fc1_1(x))
         x = self.bn2(x)
         x = torch.relu(self.fc1_2(x))
+        x = self.bn3(x)
         x = torch.relu(self.fc1_3(x))
 
         ret = self.last(x)
@@ -209,10 +218,10 @@ class CNN(nn.Module):
         self.weight_layer = nn.Sequential(nn.ReLU(),nn.Linear(1000,ensamble))
 
     def forward(self, x):
-        x = self.resnet(x)
+        # x = self.resnet(x)
         
-        # with torch.no_grad():
-        #     x = self.resnet(x)
+        with torch.no_grad():
+            x = self.resnet(x)
         ret = self.last(x)
         weight = self.weight_layer(x)
         return ret,weight
@@ -528,7 +537,8 @@ class Experiment:
 
                             n += 1
                 loss = loss_estimate * lr_adjust + loss_corr/n * 2
-                
+                if loss.item() == np.nan:
+                    raise Exception
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -603,10 +613,11 @@ class Experiment:
                     indicators_d["new_weighted_testLoss"] = new_weighted_testLoss.item()
             indicators.append(indicators_d)
             print(indicators_d)
+            print(self.settings)
+            # self.plot(indicators)
+        try:
             self.plot(indicators)
-            # try:
-            #     self.plot(indicators)
-            # except:pass
+        except:pass
     def plot(self,indicators):
         self.plot_loss_values_2(indicators,self.title,self.plot_range)
     def plot_loss_values_2(self,indicators,title,plot_range):
@@ -616,7 +627,6 @@ class Experiment:
         d["indicators"] = indicators
         with open(f"{self.title}.result.json",mode="w") as f:
             json.dump(d,f)
-               
         df = pd.DataFrame(indicators)
         df = df.set_index(df["epoch"])    
         fig,ax = plt.subplots(1,1,figsize=(10, 6))
@@ -638,7 +648,7 @@ class Experiment:
         # fig.grid(True)
         fig.savefig(str(title) + ".png")
         plt.close()
-        df.to_csv(str(title) + ".csv")
+        # df.to_csv(str(title) + ".csv")
 
 import torchvision.datasets
 
@@ -883,6 +893,7 @@ class Experiment_news(Experiment):
         iris = sklearn.datasets.fetch_20newsgroups_vectorized()
         X = iris.data
         y = iris.target
+        X = X.toarray()
         X = (X - X.mean())/(X.std())
         # y = (y - y.mean())/(y.std())
 
@@ -936,9 +947,86 @@ class Experiment_diabate(Experiment):
         y_test = y[test_index]
         super().__init__(X_train, y_train, X_test, y_test, classify, corr, corr_abs, baseLine, loss, lr, class_n, iterate, weighted_learn, aggregation, title, lr_adjusting, freezing, ensemble_n, weight_norm_dim, plot_range, negative, NET)
         
+class Experiment_digit(Experiment):
+    def __init__(self,  classify=True, corr=False, corr_abs=False, baseLine=False, loss=nn.MSELoss(), lr=0.001, class_n=10, iterate=1000, weighted_learn=True, aggregation=simple_agg, title=str(time.time()), lr_adjusting=False, freezing=False, ensemble_n=8, weight_norm_dim=1, plot_range=(0, 1), negative=True, NET=MLP) -> None:
+        iris = sklearn.datasets.load_digits()
+        X = iris.data
+        y = iris.target
+        X = (X - X.mean())/(X.std())
+        # y = (y - y.mean())/(y.std())
 
 
+        train_index = sorted(list(random.sample(list(range(X.shape[0])),X.shape[0] * 9 //10,)))
+        test_index = [i for i in range(X.shape[0]) if i not in train_index]
 
+        X_train = X[train_index]
+        y_train = y[train_index]
+
+        X_test = X[test_index]
+        y_test = y[test_index]
+        super().__init__(X_train, y_train, X_test, y_test, classify, corr, corr_abs, baseLine, loss, lr, class_n, iterate, weighted_learn, aggregation, title, lr_adjusting, freezing, ensemble_n, weight_norm_dim, plot_range, negative, NET)
+
+
+class Experiment_artificial(Experiment):
+    def __init__(self, classify=False, corr=False, corr_abs=False, baseLine=False, loss=nn.MSELoss(), lr=0.001, class_n=1, iterate=1000, weighted_learn=True, aggregation=simple_agg, title=str(time.time()), lr_adjusting=False, freezing=False, ensemble_n=8, weight_norm_dim=1, plot_range=(0, 1), negative=True, NET=MLP) -> None:
+        features =5
+        noise = 1000
+        # m_random = 42
+        
+        # # Generate correlated dummy data for regression
+        X_1, y_1 = sklearn.datasets.make_regression(
+            n_samples=100,
+            n_features=features,
+            noise=noise,
+            random_state=42,
+            bias=random.randint(0,100)
+        )
+
+        X_2, y_2 = sklearn.datasets.make_regression(
+            n_samples=100,
+            n_features=features,
+            noise=noise,
+            random_state=43,
+            # bias = 50
+            bias=random.randint(0,100)
+
+        )
+
+        X_3, y_3 = sklearn.datasets.make_regression(
+            n_samples=100,
+            n_features=features,
+            noise=noise,
+            random_state=44,
+            # bias = 50,
+            bias=random.randint(0,100)
+
+        )
+        X_trains = []
+        y_trains = []
+        X_tests = []
+        y_tests = []
+        for X,y,train_ratio in zip([X_1,X_2,X_3],[y_1,y_2,y_3],[0.9,0.9,0.9]):
+            X = (X - X.mean())/(X.std())
+            y = (y - y.mean())/(y.std())  
+            train_index = sorted(list(random.sample(list(range(X.shape[0])),int(X.shape[0] * train_ratio,))))
+            test_index = [i for i in range(X.shape[0]) if i not in train_index]
+            X_train = X[train_index]
+            y_train = y[train_index]
+            X_test = X[test_index]
+            y_test = y[test_index]
+            X_trains.append(X_train)
+            y_trains.append(y_train)
+            X_tests.append(X_test)
+            y_tests.append(y_test)
+            
+        X_train = np.concatenate(X_trains,axis=0)
+        y_train = np.concatenate(y_trains,axis=0)
+        X_test = np.concatenate(X_tests,axis=0)
+        y_test = np.concatenate(y_tests,axis=0)
+        
+  
+        super().__init__(X_train, y_train, X_test, y_test, classify, corr, corr_abs, baseLine, loss, lr, class_n, iterate, weighted_learn, aggregation, title, lr_adjusting, freezing, ensemble_n, weight_norm_dim, plot_range, negative, NET)
+        
 
 def reg_test():
     import lightgbm
@@ -1034,15 +1122,40 @@ def imagenet_test():
 
     inst.train()
 
-
-
-import itertools,random
-if __name__ == "__main__":
+def aaa():
     # for corr,agg,weight,freeze,absolute,i in 
     ds = itertools.product([0,1],[simple_agg,weight_and_pred,weight_and_pred_2,weight_average],[0,1],[0,1],[0,1],list(range(10)))
     ds = list(ds)
+    ds = [1,simple_agg]
     for d in random.sample(ds,len(ds)): 
         corr,agg,weight,freeze,absolute,i = d
-        inst = Experiment_wine(corr=corr,corr_abs=absolute,lr=0.1,iterate=300,weighted_learn=weight,
-                        aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP)
+        # inst = Experiment_wine(corr=corr,corr_abs=absolute,lr=0.1,iterate=1000,weighted_learn=weight,
+        #                 aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP)
+
+        inst = Experiment_califolnia_housing(corr=corr,corr_abs=absolute,lr=0.01,iterate=1000,weighted_learn=weight,
+                        aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze)
         inst.train()
+import itertools,random
+if __name__ == "__main__":
+    # ds = itertools.product([0,1],[simple_agg,weight_and_pred,weight_and_pred_2,weight_average],[0,1],[0,1],[0,1],list(range(10)))
+    # ds = list(ds)
+    # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,simple_agg,1,0,1,1] for i in range(10)]+ [[1,weight_and_pred,0,0,1,1] for i in range(10)]
+    # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,simple_agg,1,0,1,1] for i in range(10)]
+    ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,0,1,1] for i in range(10)]
+    # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred_2,0,1,1,1] for i in range(10)]
+    # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,1,1,1] for i in range(10)]+ [[1,weight_and_pred,0,0,1,1] for i in range(10)]
+    
+    
+    for d in random.sample(ds,len(ds)): 
+        corr,agg,weight,freeze,absolute,i = d
+        # inst = Experiment_wine(corr=corr,corr_abs=absolute,lr=0.1,iterate=2000,weighted_learn=weight,
+        #                 aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP)        
+        
+        inst = Experiment_artificial(corr=corr,corr_abs=absolute,lr=0.01,iterate=1000,weighted_learn=weight,
+                        aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP)
+        try:
+            # inst = Experiment_diabate(corr=corr,corr_abs=absolute,lr=0.001,iterate=1000,weighted_learn=weight,
+            #             aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze)
+            inst.train()
+        except Exception as e:
+            print(e)
