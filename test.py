@@ -269,8 +269,13 @@ def weight_and_pred_2(weight,estimate):
   weighted_diff_estimate = simple_estimate + diff_weighted
   return weighted_diff_estimate
 
-
-    
+def weight_and_pred_3(weight,estimate):
+  weight = nn.Softmax(1)(weight)
+  simple_estimate = torch.mean(estimate,dim = 1)
+  diff = estimate - torch.stack([simple_estimate] * estimate.shape[1],dim = 1)
+  diff_weighted = torch.mean(diff * np.exp(weight),dim = 1)
+  weighted_diff_estimate = simple_estimate + diff_weighted
+  return weighted_diff_estimate
 
 
 
@@ -365,7 +370,7 @@ class Experiment:
     def __init__(self,X_train,y_train,X_test,y_test,classify = False,corr = False,corr_abs = False,baseLine = False,
                  loss = nn.MSELoss(),lr = 0.001,class_n = 1,iterate = 1000,weighted_learn = True,
                  aggregation = simple_agg,title = str(time.time()),lr_adjusting = False,freezing = False,ensemble_n = 8,
-                 weight_norm_dim = 1,plot_range = (0,1),negative = True,NET = MLP) -> None:
+                 weight_norm_dim = 1,plot_range = (0,1),negative = True,NET = MLP,ensemble_with_simple = False) -> None:
         self.settings = {}
         self.NET = NET
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")        
@@ -397,6 +402,7 @@ class Experiment:
         self.ensemble_n = ensemble_n
         self.weight_norm_dim = weight_norm_dim
         self.negative = negative
+        self.ensemble_with_simple = ensemble_with_simple
         
         self.settings["aggregate"] = aggregation.__name__
         
@@ -414,6 +420,7 @@ class Experiment:
         self.settings["freezing"] = freezing
         self.settings["ensemble_n"] = ensemble_n
         self.settings["weight_norm_dim"] = weight_norm_dim
+        self.settings["ensemble_with_simple"] = ensemble_with_simple
 
         self.save_setting
     def save_setting(self):
@@ -457,9 +464,18 @@ class Experiment:
         optimizer = optim.SGD(model.parameters(),lr = learning_rate)
         indicators = []
         
+        if self.ensemble_with_simple:
+            simple_model = self.NET(input_size,out,ensamble)
+            simple_model.to(device)
+            simple_optimizer = optim.SGD(simple_model.parameters(),lr = learning_rate)
+        
+        
         if self.classify:
             clss = Classifier(out,self.class_n)
             clss.to(device)
+            if self.ensemble_with_simple:
+                cls_simple = Classifier(out,self.class_n)
+                cls_simple.to(device)
         for epoch in range(self.iterate):
             indicators_d  = {}
             indicators_d["epoch"] = epoch
@@ -543,7 +559,36 @@ class Experiment:
                 loss.backward()
                 optimizer.step()
                 total_loss += loss_estimate.item()
-
+                if self.ensemble_with_simple:
+                    y_pred,weight_raw = simple_model(inputs)
+                    # weight = nn.Softmax(dim=weight_norm_dim)(-(weight_raw**2))
+                    weight = nn.Softmax(dim=weight_norm_dim)(weight_raw)
+                    if self.classify:
+                        y_preds = [cls_simple(y_pred[:,i,:]) for i in range(ensamble)]
+                        y_pred = torch.stack(y_preds,axis = 1)
+                    # weight_estimate = torch.mean(y_pred * weight,dim = 1)
+                    # loss_estimate = criterion(weight_estimate, labels)
+                    if not self.base_line:
+                        simple_estimate = torch.mean(y_pred,dim = 1)
+                    else:
+                        simple_estimate = y_pred
+                    if self.classify:
+                        weight = torch.stack([weight] * self.class_n,dim=-1)
+                    # est = weight_and_pred_2(weight,y_pred)
+                    # est = weight_and_pred(weight,y_pred)
+                    if self.base_line:
+                        est = y_pred
+                    else:
+                        est = simple_agg(weight,y_pred)
+                    
+                    # loss_estimate = criterion(est,labels) * weight
+                    if self.classify:
+                        est = nn.Softmax(dim=1)(est)
+                    loss_estimate = criterion(est, labels)
+                    loss = loss_estimate
+                    simple_optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
             average_loss = total_loss / len(dataloader)/batch_size
             # indicators_d["train_loss"] = average_loss
             if self.classify:
@@ -567,7 +612,15 @@ class Experiment:
                     weighted_diff_estimate = simple_estimate + diff_weighted
                     new_weighted_estimate = weight_and_pred(weight,y_pred)
                     # weight_average_estimate = weight_average(weight,y_pred)
-                    
+                    if self.ensemble_with_simple:
+                        y_pred,weight = model(torch.Tensor(self.X_test.to(device)))
+                        y_preds = [clss(y_pred[:,i,:]) for i in range(ensamble)]
+                        y_pred = torch.stack(y_preds,axis = 1)
+                        simple_simple_estimate = simple_agg(weight,y_pred)
+                        simple_estimate = (simple_estimate + simple_simple_estimate)/2
+                        weighted_diff_estimate = (weighted_diff_estimate + simple_simple_estimate)/2                    
+                        new_weighted_estimate = (new_weighted_estimate + simple_simple_estimate)/2                    
+                                            
                     l =  nn.BCEWithLogitsLoss()
                     # weight_average_testLoss = l(y_test,weight_average_estimate)
                     simple_testLoss = l(simple_estimate,y_test)
@@ -575,6 +628,7 @@ class Experiment:
                     # new_weighted_testLoss = l(new_weighted_estimate,y_test)
                     new_weighted_testLoss = l(new_weighted_estimate,y_test)
                     
+
                     
                     print(y_test[0,:])
                     print(new_weighted_estimate[0,:])
@@ -605,6 +659,17 @@ class Experiment:
                     diff_weighted = torch.mean(diff * weight,dim = 1)
                     weighted_diff_estimate = simple_estimate + diff_weighted
                     new_weighted_estimate = weight_and_pred(weight,y_pred)
+                    # weighted_diff_estimate = weight_and_pred_3(weight,y_pred)
+                    
+                    if self.ensemble_with_simple:
+                        y_pred,weight = model(torch.Tensor(self.X_test.to(device)))
+                        y_pred = y_pred.to("cpu")
+                        weight = weight.to("cpu")
+                        simple_simple_estimate = simple_agg(weight,y_pred)
+                        simple_estimate = (simple_estimate + simple_simple_estimate)/2
+                        weighted_diff_estimate = (weighted_diff_estimate + simple_simple_estimate)/2                    
+                        new_weighted_estimate = (new_weighted_estimate + simple_simple_estimate)/2                    
+                                     
                     simple_testLoss = criterion(y_test,simple_estimate)
                     weighted_testLoss = criterion(y_test,weighted_diff_estimate)
                     new_weighted_testLoss = criterion(y_test,new_weighted_estimate)
@@ -925,7 +990,7 @@ class Experiment_wine(Experiment):
 
         X_test = X[test_index]
         y_test = y[test_index]
-        super().__init__(X_train, y_train, X_test, y_test, classify, corr, corr_abs, baseLine, loss, lr, class_n, iterate, weighted_learn, aggregation, title, lr_adjusting, freezing, ensemble_n, weight_norm_dim, plot_range, negative, NET)
+        super().__init__(X_train, y_train, X_test, y_test, classify, corr, corr_abs, baseLine, loss, lr, class_n, iterate, weighted_learn, aggregation, title, lr_adjusting, freezing, ensemble_n, weight_norm_dim, plot_range, negative, NET,ensemble_with_simple=True)
         
         
 class Experiment_diabate(Experiment):
@@ -968,9 +1033,9 @@ class Experiment_digit(Experiment):
 
 
 class Experiment_artificial(Experiment):
-    def __init__(self, classify=False, corr=False, corr_abs=False, baseLine=False, loss=nn.MSELoss(), lr=0.001, class_n=1, iterate=1000, weighted_learn=True, aggregation=simple_agg, title=str(time.time()), lr_adjusting=False, freezing=False, ensemble_n=8, weight_norm_dim=1, plot_range=(0, 1), negative=True, NET=MLP) -> None:
+    def __init__(self, classify=False, corr=False, corr_abs=False, baseLine=False, loss=nn.MSELoss(), lr=0.001, class_n=1, iterate=1000, weighted_learn=True, aggregation=simple_agg, title=str(time.time()), lr_adjusting=False, freezing=False, ensemble_n=8, weight_norm_dim=1, plot_range=(0, 1), negative=True, NET=MLP, ensemble_with_simple=False) -> None:        
         features =5
-        noise = 1000
+        noise = 40
         # m_random = 42
         
         # # Generate correlated dummy data for regression
@@ -1005,7 +1070,10 @@ class Experiment_artificial(Experiment):
         y_trains = []
         X_tests = []
         y_tests = []
-        for X,y,train_ratio in zip([X_1,X_2,X_3],[y_1,y_2,y_3],[0.9,0.9,0.9]):
+        # for X,y,train_ratio in zip([X_1,X_2,X_3],[y_1,y_2,y_3],[0.9,0.9,0.9]):
+        for X,y,train_ratio in zip([X_1,X_2,X_3],[y_1,y_2,y_3],[0.1,0.9,0.9]):
+        
+        # for X,y,train_ratio in zip([X_1],[y_1],[0.9]):
             X = (X - X.mean())/(X.std())
             y = (y - y.mean())/(y.std())  
             train_index = sorted(list(random.sample(list(range(X.shape[0])),int(X.shape[0] * train_ratio,))))
@@ -1025,7 +1093,7 @@ class Experiment_artificial(Experiment):
         y_test = np.concatenate(y_tests,axis=0)
         
   
-        super().__init__(X_train, y_train, X_test, y_test, classify, corr, corr_abs, baseLine, loss, lr, class_n, iterate, weighted_learn, aggregation, title, lr_adjusting, freezing, ensemble_n, weight_norm_dim, plot_range, negative, NET)
+        super().__init__(X_train, y_train, X_test, y_test, classify, corr, corr_abs, baseLine, loss, lr, class_n, iterate, weighted_learn, aggregation, title, lr_adjusting, freezing, ensemble_n, weight_norm_dim, plot_range, negative, NET,ensemble_with_simple=ensemble_with_simple)
         
 
 def reg_test():
@@ -1141,21 +1209,24 @@ if __name__ == "__main__":
     # ds = list(ds)
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,simple_agg,1,0,1,1] for i in range(10)]+ [[1,weight_and_pred,0,0,1,1] for i in range(10)]
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,simple_agg,1,0,1,1] for i in range(10)]
-    ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,0,1,1] for i in range(10)]
+    # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,0,0,1] for i in range(10)]
+    ds = [[1,weight_and_pred,0,0,1,1] for i in range(10)]
+    
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred_2,0,1,1,1] for i in range(10)]
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,1,1,1] for i in range(10)]+ [[1,weight_and_pred,0,0,1,1] for i in range(10)]
     
     
     for d in random.sample(ds,len(ds)): 
         corr,agg,weight,freeze,absolute,i = d
-        # inst = Experiment_wine(corr=corr,corr_abs=absolute,lr=0.1,iterate=2000,weighted_learn=weight,
+        # inst = Experiment_wine(corr=corr,corr_abs=absolute,lr=0.1,iterate=100,weighted_learn=weight,
         #                 aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP)        
         
         inst = Experiment_artificial(corr=corr,corr_abs=absolute,lr=0.01,iterate=1000,weighted_learn=weight,
-                        aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP)
-        try:
-            # inst = Experiment_diabate(corr=corr,corr_abs=absolute,lr=0.001,iterate=1000,weighted_learn=weight,
-            #             aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze)
-            inst.train()
-        except Exception as e:
-            print(e)
+                        aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP,ensemble_with_simple=False)
+        inst.train()
+        # try:
+        #     # inst = Experiment_diabate(corr=corr,corr_abs=absolute,lr=0.001,iterate=1000,weighted_learn=weight,
+        #     #             aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze)
+        #     inst.train()
+        # except Exception as e:
+        #     print(e)
