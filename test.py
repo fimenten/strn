@@ -54,8 +54,8 @@ class lastModule_(nn.Module):
         for i in range(out_features):
 
             self.d[i] = [nn.Sequential(
-                    # nn.Linear(in_features,in_features),
-                    # self.relu,
+                    nn.Linear(in_features,in_features),
+                    self.relu,
                     nn.Linear(in_features,1),
                     # nn.BatchNorm1d(1),
 
@@ -1070,8 +1070,8 @@ class Experiment_artificial(Experiment):
         y_trains = []
         X_tests = []
         y_tests = []
-        # for X,y,train_ratio in zip([X_1,X_2,X_3],[y_1,y_2,y_3],[0.9,0.9,0.9]):
-        for X,y,train_ratio in zip([X_1,X_2,X_3],[y_1,y_2,y_3],[0.1,0.9,0.9]):
+        for X,y,train_ratio in zip([X_1,X_2,X_3],[y_1,y_2,y_3],[0.9,0.9,0.9]):
+        # for X,y,train_ratio in zip([X_1,X_2,X_3],[y_1,y_2,y_3],[0.1,0.9,0.9]):
         
         # for X,y,train_ratio in zip([X_1],[y_1],[0.9]):
             X = (X - X.mean())/(X.std())
@@ -1205,23 +1205,24 @@ def aaa():
         inst.train()
 import itertools,random
 if __name__ == "__main__":
-    # ds = itertools.product([0,1],[simple_agg,weight_and_pred,weight_and_pred_2,weight_average],[0,1],[0,1],[0,1],list(range(10)))
-    # ds = list(ds)
+    ds = itertools.product([0,1],[simple_agg,weight_and_pred,weight_and_pred_2,weight_average],[0,1],[0,1],[0,1])
+    ds = list(ds)
+    ds = ds * 10
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,simple_agg,1,0,1,1] for i in range(10)]+ [[1,weight_and_pred,0,0,1,1] for i in range(10)]
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,simple_agg,1,0,1,1] for i in range(10)]
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,0,0,1] for i in range(10)]
-    ds = [[1,weight_and_pred,0,0,1,1] for i in range(10)]
+    # ds = [[1,weight_and_pred,0,0,1,1] for i in range(10)] + [[0,weight_and_pred,0,0,0,1] for i in range(10)]
     
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred_2,0,1,1,1] for i in range(10)]
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,1,1,1] for i in range(10)]+ [[1,weight_and_pred,0,0,1,1] for i in range(10)]
     
     
     for d in random.sample(ds,len(ds)): 
-        corr,agg,weight,freeze,absolute,i = d
-        # inst = Experiment_wine(corr=corr,corr_abs=absolute,lr=0.1,iterate=100,weighted_learn=weight,
+        corr,agg,weight,freeze,absolute = d
+        # inst = Experiment_wine(corr=corr,corr_abs=absolute,lr=0.1,iterate=300,weighted_learn=weight,
         #                 aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP)        
         
-        inst = Experiment_artificial(corr=corr,corr_abs=absolute,lr=0.01,iterate=1000,weighted_learn=weight,
+        inst = Experiment_artificial(corr=corr,corr_abs=absolute,lr=0.1,iterate=1000,weighted_learn=weight,
                         aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP,ensemble_with_simple=False)
         inst.train()
         # try:
