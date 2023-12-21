@@ -528,6 +528,7 @@ class Experiment:
 
                 loss_corr = 0
                 n = 1
+                corrs = []
                 if self.corr and (not self.base_line):
                 # if self.corr and (not self.base_line) and not ((self.freezing) and (not do_corr)):
                 
@@ -535,24 +536,36 @@ class Experiment:
                         for j in range(i+1,weight.shape[1]):
 
                             # loss_corr += -losser_corr(weight[:,i],weight[:,j])
-                            # loss_corr += -nn.MSELoss()(weight[:,i],weight[:,j])
-                            if self.corr_abs:                            
-                                loss_corr += abs(Corr_loss()(weight[:,i],weight[:,j]))
-                                # loss_corr += abs(Corr_loss()(weight_raw[:,i],weight_raw[:,j]))
-                                # loss_corr += -abs(nn.MSELoss()(weight[:,i],weight[:,j]))
-                            else:
-                                loss_corr += Corr_loss()(weight[:,i],weight[:,j])
-                                # loss_corr += Corr_loss()(weight_raw[:,i],weight_raw[:,j])
-                                # loss_corr += Corr_loss()(weight[:,i],weight[:,j])
-                                # loss_corr += -(nn.MSELoss()(weight[:,i],weight[:,j]))
+                            corrs.append(-nn.MSELoss()(weight[:,i],weight[:,j]))
+                            # cor = Corr_loss()(weight[:,i],weight[:,j])
+                            # if cor >0:
+                            #     corrs.append(cor)
+                            # corrs.append(cor)
+
+                            # if self.corr_abs:                            
+                            #     loss_corr += abs(Corr_loss()(weight[:,i],weight[:,j]))
+                            #     # loss_corr += abs(Corr_loss()(weight_raw[:,i],weight_raw[:,j]))
+                            #     # loss_corr += -abs(nn.MSELoss()(weight[:,i],weight[:,j]))
+                            # else:
+                            #     loss_corr += Corr_loss()(weight[:,i],weight[:,j])
+                            #     # loss_corr += Corr_loss()(weight_raw[:,i],weight_raw[:,j])
+                            #     # loss_corr += Corr_loss()(weight[:,i],weight[:,j])
+                            #     # loss_corr += -(nn.MSELoss()(weight[:,i],weight[:,j]))
                                 
                                 
-                            # loss_corr += abs(Corr_loss()(weight_raw[:,i],weight_raw[:,j]))
+                            # # loss_corr += abs(Corr_loss()(weight_raw[:,i],weight_raw[:,j]))
 
 
 
                             n += 1
-                loss = loss_estimate * lr_adjust + loss_corr/n * 2
+                        
+                    if corrs:
+                        loss_corr = torch.stack(corrs,axis = -1).mean(axis = - 1)
+                # loss = loss_estimate * lr_adjust + loss_corr/n * 2
+                if loss_corr:
+                    loss = loss_estimate * lr_adjust + loss_corr/n * 2
+                else:
+                    loss = loss_estimate * lr_adjust            
                 if loss.item() == np.nan:
                     raise Exception
                 optimizer.zero_grad()
@@ -1035,7 +1048,7 @@ class Experiment_digit(Experiment):
 class Experiment_artificial(Experiment):
     def __init__(self, classify=False, corr=False, corr_abs=False, baseLine=False, loss=nn.MSELoss(), lr=0.001, class_n=1, iterate=1000, weighted_learn=True, aggregation=simple_agg, title=str(time.time()), lr_adjusting=False, freezing=False, ensemble_n=8, weight_norm_dim=1, plot_range=(0, 1), negative=True, NET=MLP, ensemble_with_simple=False) -> None:        
         features =5
-        noise = 40
+        noise = 120
         # m_random = 42
         
         # # Generate correlated dummy data for regression
@@ -1205,24 +1218,24 @@ def aaa():
         inst.train()
 import itertools,random
 if __name__ == "__main__":
-    ds = itertools.product([0,1],[simple_agg,weight_and_pred,weight_and_pred_2,weight_average],[0,1],[0,1],[0,1])
-    ds = list(ds)
-    ds = ds * 10
+    # ds = itertools.product([0,1],[simple_agg,weight_and_pred,weight_and_pred_2,weight_average],[0,1],[0,1],[0,1])
+    # ds = list(ds)
+    # ds = ds * 10
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,simple_agg,1,0,1,1] for i in range(10)]+ [[1,weight_and_pred,0,0,1,1] for i in range(10)]
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,simple_agg,1,0,1,1] for i in range(10)]
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,0,0,1] for i in range(10)]
-    # ds = [[1,weight_and_pred,0,0,1,1] for i in range(10)] + [[0,weight_and_pred,0,0,0,1] for i in range(10)]
+    ds = [[1,weight_and_pred,0,0,1,1] for i in range(10)] + [[0,weight_and_pred,0,0,0,1] for i in range(10)] + [[0,simple_agg,0,0,0,1] for i in range(10)] 
     
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred_2,0,1,1,1] for i in range(10)]
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,1,1,1] for i in range(10)]+ [[1,weight_and_pred,0,0,1,1] for i in range(10)]
     
     
     for d in random.sample(ds,len(ds)): 
-        corr,agg,weight,freeze,absolute = d
+        corr,agg,weight,freeze,absolute,i = d
         # inst = Experiment_wine(corr=corr,corr_abs=absolute,lr=0.1,iterate=300,weighted_learn=weight,
         #                 aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP)        
         
-        inst = Experiment_artificial(corr=corr,corr_abs=absolute,lr=0.1,iterate=1000,weighted_learn=weight,
+        inst = Experiment_artificial(corr=corr,corr_abs=absolute,lr=0.01,iterate=1000,weighted_learn=weight,
                         aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP,ensemble_with_simple=False)
         inst.train()
         # try:
