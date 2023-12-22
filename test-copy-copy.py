@@ -527,6 +527,8 @@ class Experiment:
                 else:
                     loss_estimate = criterion(est, labels)
                 loss_corr = 0
+                first_loss = 0
+                second_loss = 0
                 if self.corr and (not self.base_line):
                 # if self.corr and (not self.base_line) and not ((self.freezing) and (not do_corr)):
                     if y_pred.shape != labels.shape:
@@ -1265,7 +1267,7 @@ if __name__ == "__main__":
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,0,0,1] for i in range(10)]
     # ds = [[1,weight_and_pred,0,0,1,1] for i in range(10)] + [[0,weight_and_pred,0,0,0,1] for i in range(10)] + [[0,simple_agg,0,0,0,1] for i in range(10)] 
     # ds = [[1,simple_agg,1,1,1,1] for i in range(10)] + [[1,weight_and_pred,0,1,0,1] for i in range(10)]  
-    ds = [[1,simple_agg,1,1,1,1] for i in range(10)] 
+    ds = [[1,simple_agg,1,1,1,1] for i in range(10)] +[[0,simple_agg,0,0,0,1] for i in range(10)]
     # ds =  [[1,weight_and_pred,0,0,0,1] for i in range(10)]   
      
     # ds = [[1,simple_agg,1,1,1,1] for i in range(10)] 
