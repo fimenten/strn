@@ -1275,7 +1275,7 @@ if __name__ == "__main__":
     # ds = [[1,simple_agg,1,1,1,1] for i in range(10)] + [[1,weight_and_pred,0,1,0,1] for i in range(10)]  
     # ds = [[1,simple_agg,1,1,1,1] for i in range(10)] +[[0,simple_agg,0,0,0,1] for i in range(10)]
     # ds = [[1,simple_agg,1,1,1,1] for i in range(10)]
-    ds =  [[1,weight_and_pred,0,1,0,1] for i in range(10)]   
+    ds =  [[1,weight_and_pred,0,0,0,1] for i in range(10)]   
      
     # ds = [[1,simple_agg,1,1,1,1] for i in range(10)] 
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred_2,0,1,1,1] for i in range(10)]
@@ -1287,7 +1287,7 @@ if __name__ == "__main__":
         # inst = Experiment_wine(corr=corr,corr_abs=absolute,lr=0.1,iterate=300,weighted_learn=weight,
         #                 aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP)        
         
-        inst = Experiment_artificial(corr=corr,corr_abs=absolute,lr=0.1,iterate=1000,weighted_learn=weight,
+        inst = Experiment_artificial(corr=corr,corr_abs=absolute,lr=0.01,iterate=1000,weighted_learn=weight,
                         aggregation=agg,title = str(time.time()),lr_adjusting = 0,freezing=freeze,NET = MLP,ensemble_with_simple=False)
         inst.train()
         # try:
