@@ -534,13 +534,17 @@ class Experiment:
                     else:                    
                         L = (y_pred - labels).detach()**2
                     # first_grad = weight * weight * (L - torch.mean(L,dim=1,keepdim=True))
-                    LL = (L - torch.mean(L,dim=1,keepdim=True))
-                    first_grad = (weight - weight.mean(dim=1,keepdim=True)) *  torch.stack([(weight[:,j] -weight.mean(dim=1)) *LL.mean(dim = 1) for j in range(y_pred.shape[1])],dim=1)                    
-                    # first_loss = first_grad*(weight - weight.mean(dim = 1,keepdim = True))
-                    # first_loss = first_grad*(weight_raw - weight_raw.mean(dim = 1,keepdim = True))
-                    
-                    # first_loss = first_grad.abs()
-                    first_loss = first_grad
+                    first_grad = 0
+                    for j in range(weight.shape[1]):
+                        # first_grad += torch.stack([weight_value[:,j] for _ in range(yy_pred.shape[1])],dim = 1) *  torch.stack([weight_value[:,k]*(l[:,j] - l[:,k]) for k in range(yy_pred.shape[1])],dim=1) 
+                        first_grad += weight *  torch.stack([weight[:,k]*(L[:,j] - L[:,k]) for k in range(weight.shape[1])],dim=1) 
+                    first_grad = first_grad/weight.shape[1]    
+                    # first_grad = (weight - weight.mean(dim=1,keepdim=True)) *  torch.stack([(weight[:,j] -weight.mean(dim=1)) *LL.mean(dim = 1) for j in range(yy_pred.shape[1])],dim=1)                    
+
+                    # first_grad = weight_stacked * weight_stacked * (l - torch.mean(l,dim=1,keepdim=True))
+                    first_loss = first_grad * (weight_raw - torch.log(weight.mean(dim = 1,keepdim = True)))
+                    # first_loss = first_grad
+                    # first_loss = first_grad
                     first_loss = first_loss.mean(dim = 0).mean()
                     first_loss_sum += first_loss.item()
                     # loss += first_loss
@@ -563,16 +567,19 @@ class Experiment:
                     #         corrs.append(corr_loss)
                     #         # corrs.append(corr_loss.mean(dim = 0).mean())
 
-                    if corrs:
-                        # loss_corr = torch.mean(torch.stack(corrs).abs())
-                        loss_corr = torch.mean(torch.stack(corrs))
-                        loss = loss_estimate * lr_adjust + loss_corr/n * 2
-                        second_loss_sum += loss_corr.item()
-                loss = loss_estimate
-                if first_loss:
-                    loss = loss - first_loss
-                if loss_corr:
-                    loss = loss - loss_corr
+                    # if corrs:
+                    #     # loss_corr = torch.mean(torch.stack(corrs).abs())
+                    #     loss_corr = torch.mean(torch.stack(corrs))
+                    #     loss = loss_estimate * lr_adjust + loss_corr/n * 2
+                    #     second_loss_sum += loss_corr.item()
+                if self.corr:
+                    loss = loss_estimate - first_loss
+                else:
+                    loss = loss_estimate
+                # if first_loss:
+                #     loss = loss - first_loss
+                # if loss_corr:
+                #     loss = loss - loss_corr
                 loss = loss * lr_adjust
                 # if loss_corr:
                 #     loss = (loss_estimate -first_loss - loss_corr)*lr_adjust
@@ -1236,14 +1243,14 @@ def aaa():
         inst.train()
 import itertools,random
 if __name__ == "__main__":
-    # ds = itertools.product([0,1],[simple_agg,weight_and_pred,weight_and_pred_2,weight_average],[0,1],[0,1],[0,1])
-    # ds = list(ds)
-    # ds = ds * 10
+    ds = itertools.product([0,1],[simple_agg,weight_and_pred,weight_and_pred_2,weight_average],[0,1],[0,1],[0])
+    ds = list(ds)
+    ds = ds * 10
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,simple_agg,1,0,1,1] for i in range(10)]+ [[1,weight_and_pred,0,0,1,1] for i in range(10)]
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,simple_agg,1,0,1,1] for i in range(10)]
     # ds = [[0,simple_agg,0,0,0,1] for i in range(10)] + [[1,weight_and_pred,0,0,0,1] for i in range(10)]
     # ds = [[1,weight_and_pred,0,0,1,1] for i in range(10)] + [[0,weight_and_pred,0,0,0,1] for i in range(10)] + [[0,simple_agg,0,0,0,1] for i in range(10)] 
-    ds = [[1,simple_agg,1,1,1,1] for i in range(10)] + [[1,weight_and_pred,0,1,0,1] for i in range(10)]  
+    # ds = [[1,simple_agg,1,1,1,1] for i in range(10)] + [[1,weight_and_pred,0,1,0,1] for i in range(10)]  
     # ds = [[1,simple_agg,1,1,1,1] for i in range(10)] 
     # ds =  [[1,weight_and_pred,0,0,0,1] for i in range(10)]   
      
@@ -1253,12 +1260,12 @@ if __name__ == "__main__":
     
     
     for d in random.sample(ds,len(ds)): 
-        corr,agg,weight,freeze,absolute,i = d
+        corr,agg,weight,freeze,absolute = d
         # inst = Experiment_wine(corr=corr,corr_abs=absolute,lr=0.1,iterate=300,weighted_learn=weight,
         #                 aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP)        
         
         inst = Experiment_artificial(corr=corr,corr_abs=absolute,lr=0.01,iterate=1000,weighted_learn=weight,
-                        aggregation=agg,title = str(time.time()),lr_adjusting = 1,freezing=freeze,NET = MLP,ensemble_with_simple=False)
+                        aggregation=agg,title = str(time.time()),lr_adjusting = 0,freezing=freeze,NET = MLP,ensemble_with_simple=False)
         inst.train()
         # try:
         #     # inst = Experiment_diabate(corr=corr,corr_abs=absolute,lr=0.001,iterate=1000,weighted_learn=weight,
